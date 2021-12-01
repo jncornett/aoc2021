@@ -1,4 +1,0 @@
-(executable
-  (name Bin1)
-  (public_name Bin1)
-  (libraries console.lib lib batteries))

@@ -1,4 +1,4 @@
 (executable
-  (name Bin9)
-  (public_name Bin9)
+  (name Bin09)
+  (public_name Bin09)
   (libraries console.lib lib))

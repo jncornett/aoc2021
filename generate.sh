@@ -1,15 +1,18 @@
 #!/bin/sh
 
 for i in $(seq 1 25); do
-  mkdir -pv "Bin$i"
-  cat >"Bin$i/dune" <<EOF
+  pad="$(printf "%02d" "$i")"
+  mkdir -pv "Bin$pad"
+  cat >"Bin$pad/dune" <<EOF
 (executable
-  (name Bin$i)
-  (public_name Bin$i)
+  (name Bin$pad)
+  (public_name Bin$pad)
   (libraries console.lib lib))
 EOF
-  cat >"Bin$i/Bin$i.re" <<EOF
+  if ! test -f "Bin$pad/Bin$pad.re"; then
+    cat >"Bin$pad/Bin$pad.re" <<EOF
 Console.log("Running Test Program #$i:");
 let () = print_endline(Lib.Util.hello());
 EOF
+  fi
 done
