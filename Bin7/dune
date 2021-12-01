@@ -1,0 +1,4 @@
+(executable
+  (name Bin7)
+  (public_name Bin7)
+  (libraries console.lib lib))

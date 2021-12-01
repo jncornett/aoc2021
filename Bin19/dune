@@ -1,0 +1,4 @@
+(executable
+  (name Bin19)
+  (public_name Bin19)
+  (libraries console.lib lib))
