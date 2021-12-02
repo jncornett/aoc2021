@@ -28,6 +28,46 @@ let map = (fn: 'a => 'b, s: Stream.t('a)) =>
     }
   );
 
+let next_with_predicate = (fn: 'a => bool, s: Stream.t('a)) => {
+  let stop = ref(false);
+  let out = ref(None);
+  while (! stop^) {
+    switch (Stream.next(s)) {
+    | v =>
+      if (fn(v)) {
+        out := Some(v);
+        stop := true;
+      }
+    | exception Stream.Failure => stop := true
+    };
+  };
+  out^;
+};
+
+let next_with_map = (fn: 'a => option('b), s: Stream.t('a)) => {
+  let stop = ref(false);
+  let out = ref(None);
+  while (! stop^) {
+    switch (Stream.next(s)) {
+    | v =>
+      switch (fn(v)) {
+      | Some(x) =>
+        out := Some(x);
+        stop := true;
+      | _ => ()
+      }
+    | exception Stream.Failure => stop := true
+    };
+  };
+  out^;
+};
+
+let filter = (fn: 'a => bool, s: Stream.t('a)) =>
+  Stream.from(_ => next_with_predicate(fn, s));
+
+let filter_map = (fn: 'a => option('b), s: Stream.t('a)) =>
+  Stream.from(_ => next_with_map(fn, s));
+
 let window = (n: int, s: Stream.t('a)) =>
   switch (take(n, s)) {
   | Ok(initial) =>
@@ -69,3 +109,6 @@ let lines = (chan: in_channel) =>
     | End_of_file => None
     }
   );
+
+let to_list = (s: Stream.t('a)) =>
+  s |> fold_left((acc, v) => acc @ [v], []);
