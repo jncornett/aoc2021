@@ -17,3 +17,5 @@ let goodbye = () =>
       "!"
     </Pastel>
   );
+
+let get_lines = (channel: in_channel) => {};
