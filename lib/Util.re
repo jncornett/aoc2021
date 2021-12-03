@@ -18,4 +18,10 @@ let goodbye = () =>
     </Pastel>
   );
 
-let get_lines = (channel: in_channel) => {};
+let loop_until = (fn: 'state => result('state, 'rv), init: 'state) => {
+  let state = ref(Ok(init));
+  while (Result.is_ok(state^)) {
+    state := fn(Result.get_ok(state^));
+  };
+  Result.get_error(state^);
+};

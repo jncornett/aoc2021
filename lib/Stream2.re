@@ -27,41 +27,45 @@ module Detail = {
       };
   };
 
-  let filter_next = (fn: 'a => bool, s: stream('a)) => {
-    let break = ref(false);
-    let out = ref(None);
-    while (! break^) {
-      switch (next(s)) {
-      | Some(x) =>
-        fn(x)
-          ? {
-            break := true;
-            out := Some(x);
-          }
-          : ()
-      | None => break := true
-      };
-    };
-    out^;
-  };
+  let filter_next = (fn: 'a => bool, s: stream('a)) =>
+    Util.loop_until(
+      s =>
+        switch (next(s)) {
+        | Some(x) => fn(x) ? Error(Some(x)) : Ok(s)
+        | None => Error(None)
+        },
+      s,
+    );
 
-  let filter_map_next = (fn: 'a => option('b), s: stream('a)) => {
-    let break = ref(false);
-    let out = ref(None);
-    while (! break^) {
-      switch (next(s)) {
-      | Some(x) =>
-        switch (fn(x)) {
-        | Some(y) =>
-          break := true;
-          out := Some(y);
-        | None => ()
-        }
-      | None => break := true
-      };
-    };
-    out^;
-  };
+  let filter_map_next = (fn: 'a => option('b), s: stream('a)) =>
+    Util.loop_until(
+      s =>
+        switch (next(s)) {
+        | Some(x) =>
+          switch (fn(x)) {
+          | Some(y) => Error(Some(y))
+          | None => Ok(s)
+          }
+        | None => Error(None)
+        },
+      s,
+    );
+
+  let rec flat_next = (ss: stream(stream('a))) =>
+    Util.loop_until(
+      ss =>
+        switch (Stream.peek(ss)) {
+        | Some(s) =>
+          switch (next(s)) {
+          | Some(x) => Error(Some(x))
+          | None =>
+            let _ = next(ss); // flush peeked
+            Ok(ss);
+          }
+        | None => Error(None)
+        },
+      ss,
+    );
 };
 
 let fold_left = (fn: ('b, 'a) => 'b, init: 'b, s: stream('a)) => {
@@ -105,28 +109,7 @@ let rec drop = (n: int, s: stream('a)) =>
 let consume = (s: stream('a)) => Stream.iter(_ => (), s);
 
 let flatten = (ss: stream(stream('a))) =>
-  switch (next(ss)) {
-  | Some(s) =>
-    let state = ref(s);
-    let rec next_item = (ss, s) =>
-      switch (next(s)) {
-      | Some(x) => Some((s, x))
-      | None =>
-        switch (next(ss)) {
-        | Some(s) => next_item(ss, s)
-        | None => None
-        }
-      };
-    Stream.from(_ =>
-      switch (next_item(ss, state^)) {
-      | Some((s, x)) =>
-        state := s;
-        Some(x);
-      | None => None
-      }
-    );
-  | None => Stream.sempty
-  };
+  Stream.from(_ => Detail.flat_next(ss));
 
 let take_while = (fn: 'a => bool, s: stream('a)) =>
   Stream.from(_ =>
@@ -136,22 +119,25 @@ let take_while = (fn: 'a => bool, s: stream('a)) =>
     }
   );
 
-let drop_while = (fn: 'a => bool, s: stream('a)) =>
-  Stream.from(_ => {
-    let break = ref(true);
-    let out = ref(None);
-    while (! break^) {
-      switch (next(s)) {
-      | Some(x) =>
-        if (fn(x)) {
-          break := true;
-          out := Some(x);
-        }
-      | None => break := true
-      };
-    };
-    out^;
-  });
+let drop_while = (fn: 'a => bool, s: stream('a)) => {
+  Detail.stateful(
+    drop =>
+      (
+        false,
+        drop
+          ? Util.loop_until(
+              s =>
+                switch (next(s)) {
+                | Some(x) => fn(x) ? Ok(s) : Error(Some(x))
+                | None => Error(None)
+                },
+              s,
+            )
+          : next(s),
+      ),
+    true,
+  );
+};
 
 let zip_shortest = (sl: list(stream('a))) =>
   Stream.from(_ => {
@@ -214,4 +200,27 @@ let batch = (n: int, s: stream('a)) =>
       | None => (None, None)
       },
     Some(s),
+  );
+
+let split = (s: stream(('a, 'b))) => {
+  let buf = to_list(s);
+  (
+    Stream.of_list(buf) |> map(((a, _)) => a),
+    Stream.of_list(buf) |> map(((_, b)) => b),
+  );
+};
+
+let fold_left_result =
+    (fn: ('acc, 'a) => 'acc, init: 'acc, s: stream(result('a, 'b))) =>
+  Util.loop_until(
+    ((s, init)) =>
+      switch (next(s)) {
+      | Some(r) =>
+        switch (r) {
+        | Ok(x) => Ok((s, fn(init, x)))
+        | Error(err) => Error(Error(err))
+        }
+      | None => Error(Ok(init))
+      },
+    (s, init),
   );
